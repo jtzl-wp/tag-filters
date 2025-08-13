@@ -91,10 +91,13 @@ function filter_plugins_api_result( $res ) {
 
 	if ( ! empty( $res->plugins ) && is_array( $res->plugins ) ) {
 		$tag_filter = null;
-		// phpcs:ignore: WordPress.Security.NonceVerification
 		if ( isset( $_GET['tag_filter'] ) ) {
-			// phpcs:ignore: WordPress.Security.NonceVerification
-			$tag_filter = normalize_tag( $_GET['tag_filter'] );
+			$tag = wp_unslash( $_GET['tag_filter'] );
+			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter-' . $tag ) ) {
+				// Nonce is invalid, so we don't filter.
+			} else {
+				$tag_filter = normalize_tag( $tag );
+			}
 		}
 
 		if ( ! is_array( $ptf_plugin_result_tags ) ) {
@@ -103,7 +106,7 @@ function filter_plugins_api_result( $res ) {
 
 		foreach ( $res->plugins as $i => $plugin ) {
 			$slug = $plugin['slug'];
-			if ( $plugin['tags'] && is_array( $plugin['tags'] ) ) {
+			if ( ! empty( $plugin['tags'] ) && is_array( $plugin['tags'] ) ) {
 				$tags = $plugin['tags'];
 				foreach ( $tags as $tag ) {
 					$ptf_plugin_result_tags[ $tag ][] = $slug;
@@ -142,19 +145,23 @@ function install_plugins_table_header() {
 		<?php
 		foreach ( $ptf_plugin_result_tags as $tag => $plugin_slugs ) {
 			$active = null;
-			// phpcs:ignore: WordPress.Security.NonceVerification
 			if ( ! empty( $_GET['tag_filter'] ) ) {
-				// phpcs:ignore: WordPress.Security.NonceVerification
 				$active = $tag === $_GET['tag_filter'] ? 'active' : '';
 			}
 
 			if ( ( 'untagged' === $tag ) || count( $plugin_slugs ) > 1 ) {
+				$url = add_query_arg(
+					array(
+						'tag_filter' => $tag,
+						'_wpnonce'   => wp_create_nonce( 'ptf-tag-filter-' . $tag ),
+					)
+				);
 				printf(
 					'<li><a data-slugs="%3$s" href="%4$s" class="%5$s">%1$s (%2$d)</a></li>',
 					esc_html( $tag ),
 					count( $plugin_slugs ),
 					esc_attr( wp_json_encode( $plugin_slugs ) ),
-					esc_url( add_query_arg( 'tag_filter', $tag ) ),
+					esc_url( $url ),
 					esc_attr( $active )
 				);
 			}
@@ -194,7 +201,15 @@ function action_manage_plugins_custom_column( $column_name, $plugin_file ) {
 		$tags = get_plugin_tags( $plugin_file );
 		if ( $tags && is_array( $tags ) ) {
 			$tags = array_map( __NAMESPACE__ . '\linkify_tag', $tags );
-			echo implode( ', ', $tags ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo wp_kses(
+				implode( ', ', $tags ),
+				array(
+					'a' => array(
+						'href'  => array(),
+						'class' => array(),
+					),
+				)
+			);
 		}
 	}
 }
@@ -205,10 +220,11 @@ function action_manage_plugins_custom_column( $column_name, $plugin_file ) {
  * @param string[] $views An array of available list table views.
  */
 function views_plugins( $views ) {
-	// phpcs:ignore: WordPress.Security.NonceVerification
 	if ( isset( $_GET['plugin_status'], $_GET['tag'] ) && 'tagged' === $_GET['plugin_status'] ) {
-		// phpcs:ignore: WordPress.Security.NonceVerification
-		$tag = $_GET['tag'];
+		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) ) {
+			return $views;
+		}
+		$tag = wp_unslash( $_GET['tag'] );
 
 		$views['all'] = str_replace( ' class="current" aria-current="page"', '', $views['all'] );
 
@@ -220,6 +236,7 @@ function views_plugins( $views ) {
 					array(
 						'plugin_status' => 'tagged',
 						'tag'           => $tag,
+						'_wpnonce'      => wp_create_nonce( 'ptf-tag-filter' ),
 					),
 					admin_url( 'plugins.php' )
 				)
@@ -239,19 +256,19 @@ function views_plugins( $views ) {
 function linkify_tag( $tag ) {
 	$class = '';
 
-	// phpcs:ignore: WordPress.Security.NonceVerification
 	if ( isset( $_GET['tag'] ) && ( normalize_tag( $_GET['tag'] ) === normalize_tag( $tag ) ) ) {
 		$class = 'active';
 	}
 
 	$url = null;
 	if ( 'active' === $class ) {
-		$url = remove_query_arg( array( 'plugin_status', 'tag' ) );
+		$url = remove_query_arg( array( 'plugin_status', 'tag', '_wpnonce' ) );
 	} else {
 		$url = add_query_arg(
 			array(
 				'plugin_status' => 'tagged',
 				'tag'           => $tag,
+				'_wpnonce'      => wp_create_nonce( 'ptf-tag-filter' ),
 			),
 			admin_url( 'plugins.php' )
 		);
@@ -370,10 +387,12 @@ function get_plugin_tags( $plugin ) {
  */
 function filter_plugins_list( $plugins ) {
 	global $status;
-	// phpcs:ignore: WordPress.Security.NonceVerification
 	if ( isset( $_GET['plugin_status'], $_GET['tag'] ) && 'tagged' === $_GET['plugin_status'] ) {
+		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) ) {
+			return $plugins;
+		}
 		$status            = 'tagged'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-		$tag               = normalize_tag( $_GET['tag'] ); // phpcs:ignore: WordPress.Security.NonceVerification
+		$tag               = normalize_tag( wp_unslash( $_GET['tag'] ) );
 		$plugins['tagged'] = array();
 		foreach ( $plugins['all'] as $plugin => $properties ) {
 			$tags = get_plugin_tags( $plugin );
