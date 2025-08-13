@@ -2,7 +2,7 @@
 /**
  * Plugin Name:       Plugin Tag Filters
  * Description:       A plugin to customize the Plugins interface enabling tag-based filtering.
- * Version:           0.1.0
+ * Version:           1.0.0
  * Requires at least: 6.7
  * Requires PHP:      7.4
  * Author:            George Stephanis
