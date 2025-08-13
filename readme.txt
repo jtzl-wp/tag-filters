@@ -38,5 +38,5 @@ For the 'Add New' screen, the tags are retrieved from the WordPress.org plugin A
 
 == Changelog ==
 
-= 0.1.0 =
+= 1.0.0 =
 * Initial release.
