@@ -105,6 +105,10 @@ function filter_plugins_api_result( $res ) {
 		}
 
 		foreach ( $res->plugins as $i => $plugin ) {
+			if ( empty( $plugin['slug'] ) ) {
+				continue; // Skip plugins without a slug.
+			}
+
 			$slug = $plugin['slug'];
 			if ( ! empty( $plugin['tags'] ) && is_array( $plugin['tags'] ) ) {
 				$tags = $plugin['tags'];
