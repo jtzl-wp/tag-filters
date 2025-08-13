@@ -1,7 +1,7 @@
 === Plugin Tag Filters ===
 Contributors: jtzl
 Tags: plugins, tags, filter, admin
-Requires at least: 6.7
+Requires at least: 6.8
 Tested up to: 6.8
 Stable tag: 1.0.0
 Requires PHP: 7.4
