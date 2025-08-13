@@ -92,7 +92,7 @@ function filter_plugins_api_result( $res ) {
 	if ( ! empty( $res->plugins ) && is_array( $res->plugins ) ) {
 		$tag_filter = null;
 		if ( isset( $_GET['tag_filter'] ) ) {
-			$tag = wp_unslash( $_GET['tag_filter'] );
+			$tag = sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) );
 			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter-' . $tag ) ) {
 				// Nonce is invalid, so we don't filter.
 			} else {
