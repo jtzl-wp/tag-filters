@@ -228,7 +228,7 @@ function views_plugins( $views ) {
 		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) ) {
 			return $views;
 		}
-		$tag = wp_unslash( $_GET['tag'] );
+		$tag = sanitize_text_field( wp_unslash( $_GET['tag'] ) );
 
 		$views['all'] = str_replace( ' class="current" aria-current="page"', '', $views['all'] );
 
