@@ -396,7 +396,7 @@ function filter_plugins_list( $plugins ) {
 			return $plugins;
 		}
 		$status            = 'tagged'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-		$tag               = normalize_tag( wp_unslash( $_GET['tag'] ) );
+		$tag               = normalize_tag( sanitize_text_field( wp_unslash( $_GET['tag'] ) ) );
 		$plugins['tagged'] = array();
 		foreach ( $plugins['all'] as $plugin => $properties ) {
 			$tags = get_plugin_tags( $plugin );
