@@ -149,8 +149,12 @@ function install_plugins_table_header() {
 		<?php
 		foreach ( $ptf_plugin_result_tags as $tag => $plugin_slugs ) {
 			$active = null;
-			if ( ! empty( $_GET['tag_filter'] ) ) {
-				$active = $tag === $_GET['tag_filter'] ? 'active' : '';
+			if (
+				! empty( $_GET['tag_filter'] )
+				&& ! empty( $_GET['_wpnonce'] )
+				&& wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter-' . sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) ) )
+			) {
+				$active = $tag === sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) ) ? 'active' : '';
 			}
 
 			if ( ( 'untagged' === $tag ) || count( $plugin_slugs ) > 1 ) {
@@ -260,7 +264,11 @@ function views_plugins( $views ) {
 function linkify_tag( $tag ) {
 	$class = '';
 
-	if ( isset( $_GET['tag'] ) && ( normalize_tag( $_GET['tag'] ) === normalize_tag( $tag ) ) ) {
+	if (
+		isset( $_GET['tag'], $_GET['_wpnonce'] ) &&
+		wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) &&
+		( normalize_tag( sanitize_text_field( wp_unslash( $_GET['tag'] ) ) ) === normalize_tag( $tag ) )
+	) {
 		$class = 'active';
 	}
 
