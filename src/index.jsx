@@ -18,7 +18,7 @@ const setupFilterListeners = ( event ) => {
 				);
 		} else {
 			const previouslyActive = pluginFilterForm.querySelector(
-				'.plugin-table-tag-filters .active'
+				'.jtzl-ptf-plugin-table-tag-filters .active'
 			);
 			if ( previouslyActive ) {
 				previouslyActive.classList.remove( 'active' );

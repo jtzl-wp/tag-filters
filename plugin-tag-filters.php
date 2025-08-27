@@ -1,20 +1,20 @@
 <?php
 /**
- * Plugin Name:       Plugin Tag Filters
- * Description:       A plugin to customize the Plugins interface enabling tag-based filtering.
+ * Plugin Name:       Tag Filters
+ * Description:       Customize the Plugins interface enabling tag-based filtering.
  * Version:           1.0.0
  * Requires at least: 6.8
  * Requires PHP:      7.4
  * Author:            JT G.
  * License:           GPL-2.0-or-later
  * License URI:       https://www.gnu.org/licenses/gpl-2.0.html
- * Text Domain:       plugin-tag-filters
+ * Text Domain:       tag-filters
  * Domain Path:       /languages
  *
- * @package PluginTagFilters
+ * @package JTZL\PluginTagFilters
  */
 
-namespace PluginTagFilters;
+namespace JTZL\PluginTagFilters;
 
 /**
  * Runs on `init` action.  Sets up other hooks and integrations.
@@ -34,6 +34,106 @@ function on_init() {
 	add_filter( 'plugins_list', __NAMESPACE__ . '\filter_plugins_list' );
 }
 add_action( 'init', __NAMESPACE__ . '\on_init' );
+
+/**
+ * Safely read package.json data using WordPress filesystem API.
+ *
+ * @since 1.0.0
+ *
+ * @param string $package_json_path Full path to the package.json file.
+ *
+ * @return array|false Array of keywords from package.json, or false on failure.
+ */
+function get_plugin_package_data( $package_json_path ) {
+	// Validate input parameter.
+	if ( empty( $package_json_path ) || ! is_string( $package_json_path ) ) {
+		return false;
+	}
+
+	// Check if file exists before attempting to read.
+	if ( ! file_exists( $package_json_path ) ) {
+		return false;
+	}
+
+	// Initialize WordPress filesystem.
+	if ( ! function_exists( 'WP_Filesystem' ) ) {
+		require_once ABSPATH . 'wp-admin/includes/file.php';
+	}
+
+	// Initialize filesystem with direct method for local file access.
+	if ( ! WP_Filesystem() ) {
+		return false;
+	}
+
+	global $wp_filesystem;
+	
+	// Use WordPress filesystem API to read the file.
+	if ( ! $wp_filesystem->exists( $package_json_path ) ) {
+		return false;
+	}
+
+	$package_content = $wp_filesystem->get_contents( $package_json_path );
+	if ( false === $package_content ) {
+		return false;
+	}
+
+	// Parse JSON content.
+	$package_data = json_decode( $package_content, true );
+	if ( null === $package_data || ! is_array( $package_data ) ) {
+		return false;
+	}
+
+	// Extract keywords if they exist.
+	if ( ! empty( $package_data['keywords'] ) && is_array( $package_data['keywords'] ) ) {
+		return array_map( 'trim', $package_data['keywords'] );
+	}
+
+	return false;
+}
+
+/**
+ * Centralized nonce validation and permission checking function.
+ *
+ * @since 1.0.0
+ *
+ * @param string $action The nonce action to validate.
+ * @param string $nonce_field The nonce field name (default: '_wpnonce').
+ * @param string $capability The required capability for the user (default: 'install_plugins').
+ *
+ * @return bool True if validation passes, false otherwise.
+ */
+function validate_nonce_and_permissions( $action, $nonce_field = '_wpnonce', $capability = 'install_plugins' ) {
+	// Validate input parameters
+	if ( empty( $action ) || ! is_string( $action ) ) {
+		return false;
+	}
+
+	if ( empty( $nonce_field ) || ! is_string( $nonce_field ) ) {
+		return false;
+	}
+
+	if ( empty( $capability ) || ! is_string( $capability ) ) {
+		return false;
+	}
+
+	// Check if nonce field exists in request
+	if ( ! isset( $_GET[ $nonce_field ] ) ) {
+		return false;
+	}
+
+	// Verify nonce
+	$nonce = sanitize_key( $_GET[ $nonce_field ] );
+	if ( ! wp_verify_nonce( $nonce, $action ) ) {
+		return false;
+	}
+
+	// Check user permissions
+	if ( ! current_user_can( $capability ) ) {
+		return false;
+	}
+
+	return true;
+}
 
 /**
  * Add in our additional styles to the plugin-install.php screen
@@ -87,21 +187,23 @@ function add_plugin_screen_assets() {
  * @param object|WP_Error $res    Response object or WP_Error.
  */
 function filter_plugins_api_result( $res ) {
-	global $ptf_plugin_result_tags;
+	global $jtzl_ptf_plugin_result_tags;
 
 	if ( ! empty( $res->plugins ) && is_array( $res->plugins ) ) {
 		$tag_filter = null;
 		if ( isset( $_GET['tag_filter'] ) ) {
 			$tag = sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) );
-			if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter-' . $tag ) ) {
-				// Nonce is invalid, so we don't filter.
-			} else {
+			$nonce_action = 'jtzl-ptf-tag-filter-' . $tag;
+			
+			// Use centralized validation function
+			if ( validate_nonce_and_permissions( $nonce_action, '_wpnonce', 'install_plugins' ) ) {
 				$tag_filter = normalize_tag( $tag );
 			}
+			// If validation fails, we don't filter (silent failure for security)
 		}
 
-		if ( ! is_array( $ptf_plugin_result_tags ) ) {
-			$ptf_plugin_result_tags = array();
+		if ( ! is_array( $jtzl_ptf_plugin_result_tags ) ) {
+			$jtzl_ptf_plugin_result_tags = array();
 		}
 
 		foreach ( $res->plugins as $i => $plugin ) {
@@ -113,7 +215,7 @@ function filter_plugins_api_result( $res ) {
 			if ( ! empty( $plugin['tags'] ) && is_array( $plugin['tags'] ) ) {
 				$tags = $plugin['tags'];
 				foreach ( $tags as $tag ) {
-					$ptf_plugin_result_tags[ $tag ][] = $slug;
+					$jtzl_ptf_plugin_result_tags[ $tag ][] = $slug;
 				}
 				if ( $tag_filter ) {
 					$tags_normalized = array_map( __NAMESPACE__ . '\normalize_tag', $tags );
@@ -122,11 +224,11 @@ function filter_plugins_api_result( $res ) {
 					}
 				}
 			} else {
-				$ptf_plugin_result_tags['untagged'][] = $slug;
+				$jtzl_ptf_plugin_result_tags['untagged'][] = $slug;
 			}
 		}
 
-		ksort( $ptf_plugin_result_tags );
+		ksort( $jtzl_ptf_plugin_result_tags );
 	}
 
 	return $res;
@@ -138,21 +240,21 @@ function filter_plugins_api_result( $res ) {
  * @return void
  */
 function install_plugins_table_header() {
-	global $ptf_plugin_result_tags;
+	global $jtzl_ptf_plugin_result_tags;
 
-	if ( empty( $ptf_plugin_result_tags ) || ! is_array( $ptf_plugin_result_tags ) ) {
+	if ( empty( $jtzl_ptf_plugin_result_tags ) || ! is_array( $jtzl_ptf_plugin_result_tags ) ) {
 		return;
 	}
 
 	?>
-	<ul class="plugin-table-tag-filters">
+	<ul class="jtzl-ptf-plugin-table-tag-filters">
 		<?php
-		foreach ( $ptf_plugin_result_tags as $tag => $plugin_slugs ) {
+		foreach ( $jtzl_ptf_plugin_result_tags as $tag => $plugin_slugs ) {
 			$active = null;
 			if (
 				! empty( $_GET['tag_filter'] )
 				&& ! empty( $_GET['_wpnonce'] )
-				&& wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter-' . sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) ) )
+				&& wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'jtzl-ptf-tag-filter-' . sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) ) )
 			) {
 				$active = $tag === sanitize_text_field( wp_unslash( $_GET['tag_filter'] ) ) ? 'active' : '';
 			}
@@ -161,7 +263,7 @@ function install_plugins_table_header() {
 				$url = add_query_arg(
 					array(
 						'tag_filter' => $tag,
-						'_wpnonce'   => wp_create_nonce( 'ptf-tag-filter-' . $tag ),
+						'_wpnonce'   => wp_create_nonce( 'jtzl-ptf-tag-filter-' . $tag ),
 					)
 				);
 				printf(
@@ -189,7 +291,7 @@ function install_plugins_table_header() {
 function filter_manage_plugins_columns( $columns ) {
 	$columns = array_merge(
 		array_slice( $columns, 0, 2 ),
-		array( 'tags' => __( 'Tags', 'plugin-tag-filters' ) ),
+		array( 'tags' => __( 'Tags', 'tag-filters' ) ),
 		array_slice( $columns, 2 )
 	);
 
@@ -229,9 +331,11 @@ function action_manage_plugins_custom_column( $column_name, $plugin_file ) {
  */
 function views_plugins( $views ) {
 	if ( isset( $_GET['plugin_status'], $_GET['tag'] ) && 'tagged' === $_GET['plugin_status'] ) {
-		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) ) {
+		// Use centralized validation function for security
+		if ( ! validate_nonce_and_permissions( 'jtzl-ptf-tag-filter', '_wpnonce', 'activate_plugins' ) ) {
 			return $views;
 		}
+		
 		$tag = sanitize_text_field( wp_unslash( $_GET['tag'] ) );
 
 		$views['all'] = str_replace( ' class="current" aria-current="page"', '', $views['all'] );
@@ -244,7 +348,7 @@ function views_plugins( $views ) {
 					array(
 						'plugin_status' => 'tagged',
 						'tag'           => $tag,
-						'_wpnonce'      => wp_create_nonce( 'ptf-tag-filter' ),
+						'_wpnonce'      => wp_create_nonce( 'jtzl-ptf-tag-filter' ),
 					),
 					admin_url( 'plugins.php' )
 				)
@@ -264,9 +368,10 @@ function views_plugins( $views ) {
 function linkify_tag( $tag ) {
 	$class = '';
 
+	// Use centralized validation function for security
 	if (
-		isset( $_GET['tag'], $_GET['_wpnonce'] ) &&
-		wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) &&
+		isset( $_GET['tag'] ) &&
+		validate_nonce_and_permissions( 'jtzl-ptf-tag-filter', '_wpnonce', 'activate_plugins' ) &&
 		( normalize_tag( sanitize_text_field( wp_unslash( $_GET['tag'] ) ) ) === normalize_tag( $tag ) )
 	) {
 		$class = 'active';
@@ -280,7 +385,7 @@ function linkify_tag( $tag ) {
 			array(
 				'plugin_status' => 'tagged',
 				'tag'           => $tag,
-				'_wpnonce'      => wp_create_nonce( 'ptf-tag-filter' ),
+				'_wpnonce'      => wp_create_nonce( 'jtzl-ptf-tag-filter' ),
 			),
 			admin_url( 'plugins.php' )
 		);
@@ -347,7 +452,7 @@ function normalize_tag( $tag ) {
 	/**
 	 * Give plugins a chance to review the normalization we've done, and apply their own overrides.
 	 */
-	apply_filters( 'ptf_normalize_tag', $tag, $raw );
+	apply_filters( 'jtzl_ptf_normalize_tag', $tag, $raw );
 
 	return $tag;
 }
@@ -362,6 +467,7 @@ function normalize_tag( $tag ) {
  * @return mixed Either an array of tags, or something false-y.
  */
 function get_plugin_tags( $plugin ) {
+	// First, try to get tags from readme.txt file.
 	$readme_file = WP_PLUGIN_DIR . '/' . dirname( $plugin ) . '/readme.txt';
 	if ( file_exists( $readme_file ) ) {
 		$readme_headers = get_file_data(
@@ -379,14 +485,12 @@ function get_plugin_tags( $plugin ) {
 		return false;
 	}
 
+	// Fallback to package.json using the safe file reading function.
 	$package_json = WP_PLUGIN_DIR . '/' . dirname( $plugin ) . '/package.json';
-	if ( file_exists( $package_json ) ) {
-		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
-		$package_headers = json_decode( file_get_contents( $package_json ) );
-
-		if ( ! empty( $package_headers->keywords ) ) {
-			return array_map( 'trim', (array) $package_headers->keywords );
-		}
+	$package_keywords = get_plugin_package_data( $package_json );
+	
+	if ( false !== $package_keywords && is_array( $package_keywords ) ) {
+		return $package_keywords;
 	}
 
 	return null;
@@ -400,9 +504,11 @@ function get_plugin_tags( $plugin ) {
 function filter_plugins_list( $plugins ) {
 	global $status;
 	if ( isset( $_GET['plugin_status'], $_GET['tag'] ) && 'tagged' === $_GET['plugin_status'] ) {
-		if ( ! isset( $_GET['_wpnonce'] ) || ! wp_verify_nonce( sanitize_key( $_GET['_wpnonce'] ), 'ptf-tag-filter' ) ) {
+		// Use centralized validation function for security
+		if ( ! validate_nonce_and_permissions( 'jtzl-ptf-tag-filter', '_wpnonce', 'activate_plugins' ) ) {
 			return $plugins;
 		}
+		
 		$status            = 'tagged'; // phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
 		$tag               = normalize_tag( sanitize_text_field( wp_unslash( $_GET['tag'] ) ) );
 		$plugins['tagged'] = array();
