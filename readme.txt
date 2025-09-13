@@ -1,5 +1,5 @@
 === Tag Filters ===
-Contributors: jtzl
+Contributors: jtzl, georgestephanis, yoren
 Tags: plugins, tags, filter, admin
 Requires at least: 6.8
 Tested up to: 6.8
