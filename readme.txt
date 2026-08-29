@@ -1,4 +1,4 @@
-=== Tag Filters ===
+=== JTZL's Tag Filters ===
 Contributors: jtzl, georgestephanis, yoren
 Tags: plugins, tags, filter, admin
 Requires at least: 6.8

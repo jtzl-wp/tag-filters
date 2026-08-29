@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       Tag Filters
+ * Plugin Name:       JTZL's Tag Filters
  * Description:       Customize the Plugins interface enabling tag-based filtering.
  * Version:           1.0.0
  * Requires at least: 6.8
