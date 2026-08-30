@@ -2,7 +2,7 @@
 Contributors: jtzl, georgestephanis, yoren
 Tags: plugins, tags, filter, admin
 Requires at least: 6.8
-Tested up to: 6.8
+Tested up to: 7.1
 Stable tag: 1.0.0
 Requires PHP: 7.4
 License: GPLv2 or later
